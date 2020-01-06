@@ -14,11 +14,6 @@ from six.moves import xrange  # pylint: disable=redefined-builtin
 import tensorflow as tf
 import bawn
 
-parser = argparse.ArgumentParser()  
-parser.add_argument("LOG_DIR", help="LOG_DIR")
-parser.add_argument("NUM_GPUS", help="NUM_GPUS", type=int)
-args = parser.parse_args()  
-
 LOG_DIR = args.LOG_DIR
 NUM_GPUS = args.NUM_GPUS
 LOG_DEVICE_PLACEMENT = False 
@@ -241,6 +236,10 @@ def train():
       
             
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()  
+    parser.add_argument("LOG_DIR", help="LOG_DIR")
+    parser.add_argument("NUM_GPUS", help="NUM_GPUS", type=int)
+    args = parser.parse_args()
     with tf.device('/cpu:0'):
         data_segments, data_labels = bawn.load_data_simple('noisy_train.mat','target_train.mat')
     train()
