@@ -6,7 +6,7 @@ from datetime import datetime
 import os.path
 import re
 import time
-import cPickle as pickle
+import pickle
 import argparse 
 
 import numpy as np
@@ -16,13 +16,13 @@ import bawn
 
 LOG_DIR = '/tmp'
 NUM_GPUS = 1
-LOG_DEVICE_PLACEMENT = False 
+LOG_DEVICE_PLACEMENT = False
 
 
 # Constants describing the training process.
 MOVING_AVERAGE_DECAY = 0.9999
 INITIAL_LEARNING_RATE = 0.001
-ANNEALING_RATE = 0.9886
+ANNEALING_RATE = 0.996
 MAX_STEPS = 800000
 NUM_STEPS_PER_DECAY = 1000
 PERIOD_SUMMARY = 120
@@ -104,19 +104,33 @@ def average_gradients(tower_grads):
         average_grads.append(grad_and_var)
     return average_grads
 
-
+#def data_generator(data_segments, data_labels):
+    ## initialize training data
+#    while True:
+#        for i in range(0, data_segments.shape[0], 1000):
+#            yield ({'segments_initializer': data_segments[i*1000:(i+i)*1000], 'labels_initializer': data_labels[i*1000:(i+1)*1000]})
 
 def train():
-    
     """Train BAWN for a number of steps."""
-    with tf.Graph().as_default(), tf.device('/cpu:0'):
+    with tf.Graph().as_default(), tf.device('/device:CPU:0'):
         # training data initializers
-        with tf.name_scope('input'):
-            segments_initializer, labels_initializer, input_segments, input_labels \
-            = bawn.data_initializer_simple(data_segments, data_labels)
+        #with tf.name_scope('input'):
+            #segments_initializer, labels_initializer, input_segments, input_labels \
+            #= bawn.data_initializer_simple(data_segments, data_labels)
             
-            segment, label = tf.train.slice_input_producer([input_segments, input_labels])
+            #segment, label = tf.train.slice_input_producer([input_segments, input_labels])
         
+        shuffle_size = 1000
+        batch_size = bawn.BATCH_SIZE
+        repeat_size = None
+        with tf.name_scope('input'):
+            dataset = tf.data.Dataset.from_tensor_slices((data_segments, data_labels))
+            dataset = dataset.shuffle(shuffle_size)
+            dataset = dataset.batch(batch_size)
+            dataset = dataset.repeat(repeat_size)
+            iter = dataset.make_initializable_iterator()
+            segments, labels = iter.get_next()
+
         # Create a variable to count the number of train() calls. This equals the
         # number of batches processed * num_gpus.
         global_step = tf.train.create_global_step()
@@ -132,10 +146,10 @@ def train():
         tower_grads = []
         with tf.variable_scope(tf.get_variable_scope()):
             for i in xrange(NUM_GPUS):
-                with tf.device('/gpu:%d' % i):
+                with tf.device('/device:GPU:%d' % i):
                     with tf.name_scope('%s_%d' % (bawn.TOWER_NAME, i)) as scope:
                         # Get batches of images and labels for BAWN.
-                        segments, labels = tf.train.batch([segment, label], batch_size=bawn.BATCH_SIZE)   
+                        # segments, labels = tf.train.batch([segment, label], batch_size=bawn.BATCH_SIZE)   
                         
                         # Calculate the loss for one tower of the BAWN model. This function
                         # constructs the entire BAWN model but shares the variables across
@@ -174,7 +188,7 @@ def train():
         train_op = tf.group(apply_gradient_op, variables_averages_op)
     
         # Create a saver.
-        saver = tf.train.Saver(tf.global_variables(), max_to_keep=8192)
+        saver = tf.train.Saver(tf.global_variables(), max_to_keep=10)
     
         # Build the summary operation from the last tower summaries.
         summary_op = tf.summary.merge(summaries, collections=[tf.GraphKeys.SUMMARY_OP])
@@ -195,11 +209,13 @@ def train():
         
         with sv.managed_session(config=sess_config, start_standard_services=False) as sess:
             ## initialize training data
-            sess.run(input_segments.initializer,
-                 feed_dict={segments_initializer: data_segments})
-            sess.run(input_labels.initializer,
-                 feed_dict={labels_initializer: data_labels})
-            
+            #sess.run(segments_initializer,
+            #     feed_dict={segments_initializer: data_segments})
+            #sess.run(labels_initializer,
+            #     feed_dict={labels_initializer: data_labels})
+            #print("init....")
+            sess.run(iter.initializer)
+            #sess.run(tf.global_variables_initializer())
             print('Starting services and queue runners...')
             # start the queue runner after feed_dict so that the desired elements are enqueued
             sv.start_standard_services(sess)
@@ -242,6 +258,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
     LOG_DIR = args.LOG_DIR
     NUM_GPUS = args.NUM_GPUS
-    with tf.device('/cpu:0'):
-        data_segments, data_labels = bawn.load_data_simple('noisy_train.mat','target_train.mat')
+    with tf.device('/device:CPU:0'):
+        data_segments, data_labels, f_in, f_tgt = bawn.load_data_simple('noisy_train.mat','target_train.mat')
     train()
+    f_in.close()
+    f_tgt.close()

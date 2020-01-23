@@ -10,9 +10,9 @@ import numpy as np, h5py
 
 
 #Basic constants
-USE_FP16 = False
+USE_FP16 = True
 DATA_DIR = 'assets'
-BATCH_SIZE = 1
+BATCH_SIZE = 8
 
 # Global constants describing the BAWN data set.
 LEN_OUTPUT = 16384
@@ -492,33 +492,33 @@ def load_data_prior(train, target):
 
 
 def load_data_simple(train, target):
-    
     dest_directory = DATA_DIR
     assert os.path.exists(dest_directory)
     filepath_train = os.path.join(dest_directory, train)
     filepath_target = os.path.join(dest_directory, target)
     
-    with h5py.File(filepath_train,'r') as f:
-        inputs = np.array(f.get(os.path.splitext(train)[0]))
+    f_in = h5py.File(filepath_train,'r')
+    inputs = f_in.get(os.path.splitext(train)[0])
+    f_tgt = h5py.File(filepath_target,'r')
+    labels = f_tgt.get(os.path.splitext(target)[0])
         
-    with h5py.File(filepath_target,'r') as f:
-        labels = np.array(f.get(os.path.splitext(target)[0]))
-        
+    print (inputs.shape)
+    index = np.random.choice(inputs.shape[0], 1000000)
     assert (inputs.dtype == 'float32' and labels.dtype == 'uint8'), 'Data type incorrect!!!!'
     assert inputs.shape[0] == labels.shape[0], 'The first dimension (batch size) must equal!!!!'    
         
-    return (inputs, labels)
+    return (inputs[index], labels[index], f_in, f_tgt)
 
 
 def data_initializer_prior(data_segments, data_labels):
     # Input data
-    segments_initializer = tf.placeholder_with_default(
-        tf.zeros(data_segments.shape, tf.uint8),
-        shape=data_segments.shape,
+    segments_initializer = tf.placeholder(
+        tf.uint8,
+        shape=(1000,data_segments.shape[1]),
         name='segments_initializer')
-    labels_initializer = tf.placeholder_with_default(
-        tf.zeros(data_labels.shape, tf.uint8),
-        shape=data_labels.shape,
+    labels_initializer = tf.placeholder(
+        tf.uint8,
+        shape=(1000,data_labels.shape[1]),
         name='labels_initializer')
     input_segments = tf.Variable(
           segments_initializer, trainable=False, 
@@ -532,12 +532,10 @@ def data_initializer_prior(data_segments, data_labels):
 
 def data_initializer_simple(data_segments, data_labels):
     # Input data
-    segments_initializer = tf.placeholder_with_default(
-        tf.zeros(data_segments.shape, tf.float32),
+    segments_initializer = tf.placeholder(tf.float32,
         shape=data_segments.shape,
         name='segments_initializer')
-    labels_initializer = tf.placeholder_with_default(
-        tf.zeros(data_labels.shape, tf.uint8),
+    labels_initializer = tf.placeholder(tf.uint8,
         shape=data_labels.shape,
         name='labels_initializer')
     input_segments = tf.Variable(
