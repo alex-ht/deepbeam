@@ -14,6 +14,9 @@ from six.moves import xrange  # pylint: disable=redefined-builtin
 import tensorflow as tf
 import bawn
 
+from tensorflow.python.util import deprecation
+deprecation._PRINT_DEPRECATION_WARNINGS = False
+
 LOG_DIR = '/tmp'
 NUM_GPUS = 1
 LOG_DEVICE_PLACEMENT = False
