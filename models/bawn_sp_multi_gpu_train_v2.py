@@ -110,6 +110,9 @@ def average_gradients(tower_grads):
 #        for i in range(0, data_segments.shape[0], 1000):
 #            yield ({'segments_initializer': data_segments[i*1000:(i+i)*1000], 'labels_initializer': data_labels[i*1000:(i+1)*1000]})
 
+#def GetDataSlices(x, data_segments, data_labels):
+#    return (data_Segments[sorted(x)], data_labels[sorted(x)])
+
 def train():
     """Train BAWN for a number of steps."""
     with tf.Graph().as_default(), tf.device('/device:CPU:0'):
@@ -124,10 +127,11 @@ def train():
         batch_size = bawn.BATCH_SIZE
         repeat_size = None
         with tf.name_scope('input'):
-            dataset = tf.data.Dataset.from_tensor_slices((data_segments, data_labels))
+            dataset = tf.data.Dataset.from_tensor_slices(np.arange(data_segments.shape[0]))
             dataset = dataset.shuffle(shuffle_size)
             dataset = dataset.batch(batch_size)
             dataset = dataset.repeat(repeat_size)
+            dataset = dataset.map(lambda x: (data_Segments[sorted(x)], data_labels[sorted(x)]))
             iter = dataset.make_initializable_iterator()
             segments, labels = iter.get_next()
 
