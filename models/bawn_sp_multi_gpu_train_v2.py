@@ -13,6 +13,7 @@ import numpy as np
 from six.moves import xrange  # pylint: disable=redefined-builtin
 import tensorflow as tf
 import bawn
+import tensorflow_io as tfio
 
 from tensorflow.python.util import deprecation
 deprecation._PRINT_DEPRECATION_WARNINGS = False
@@ -113,8 +114,8 @@ def average_gradients(tower_grads):
 #        for i in range(0, data_segments.shape[0], 1000):
 #            yield ({'segments_initializer': data_segments[i*1000:(i+i)*1000], 'labels_initializer': data_labels[i*1000:(i+1)*1000]})
 
-#def GetDataSlices(x, data_segments, data_labels):
-#    return (data_Segments[sorted(x)], data_labels[sorted(x)])
+#def GetDataSlices(x):
+#    return (data_segments[sorted(x)], data_labels[sorted(x)])
 
 def train():
     """Train BAWN for a number of steps."""
@@ -130,11 +131,10 @@ def train():
         batch_size = bawn.BATCH_SIZE
         repeat_size = None
         with tf.name_scope('input'):
-            dataset = tf.data.Dataset.from_tensor_slices(np.arange(data_segments.shape[0]))
+            dataset = tf.data.Dataset.zip((data_segments, data_labels))
             dataset = dataset.shuffle(shuffle_size)
             dataset = dataset.batch(batch_size)
             dataset = dataset.repeat(repeat_size)
-            dataset = dataset.map(lambda x: (data_Segments[sorted(x)], data_labels[sorted(x)]))
             iter = dataset.make_initializable_iterator()
             segments, labels = iter.get_next()
 
@@ -259,6 +259,8 @@ def train():
       
             
 if __name__ == '__main__':
+    tf.enable_eager_execution()
+    print(tf.executing_eagerly())
     parser = argparse.ArgumentParser()  
     parser.add_argument("LOG_DIR", help="LOG_DIR")
     parser.add_argument("NUM_GPUS", help="NUM_GPUS", type=int)
@@ -266,7 +268,9 @@ if __name__ == '__main__':
     LOG_DIR = args.LOG_DIR
     NUM_GPUS = args.NUM_GPUS
     with tf.device('/device:CPU:0'):
-        data_segments, data_labels, f_in, f_tgt = bawn.load_data_simple('noisy_train.mat','target_train.mat')
+        #data_segments, data_labels, f_in, f_tgt = bawn.load_data_simple('noisy_train.mat','target_train.mat')
+        data_segments = tfio.IODataset.from_hdf5(filename='assets/noisy_train.mat', dataset='noisy_train')
+        data_labels = tfio.IODataset.from_hdf5(filename='assets/target_train.mat', dataset='target_train')
     train()
     f_in.close()
     f_tgt.close()

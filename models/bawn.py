@@ -503,11 +503,10 @@ def load_data_simple(train, target):
     labels = f_tgt.get(os.path.splitext(target)[0])
         
     print (inputs.shape)
-    index = np.random.choice(inputs.shape[0], 1000000)
     assert (inputs.dtype == 'float32' and labels.dtype == 'uint8'), 'Data type incorrect!!!!'
     assert inputs.shape[0] == labels.shape[0], 'The first dimension (batch size) must equal!!!!'    
         
-    return (inputs[index], labels[index], f_in, f_tgt)
+    return (inputs, labels, f_in, f_tgt)
 
 
 def data_initializer_prior(data_segments, data_labels):
