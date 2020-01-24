@@ -15,6 +15,8 @@ import tensorflow as tf
 import bawn
 import tensorflow_io as tfio
 
+import tensorflow.contrib.eager as tfe
+
 from tensorflow.python.util import deprecation
 deprecation._PRINT_DEPRECATION_WARNINGS = False
 
@@ -119,7 +121,22 @@ def average_gradients(tower_grads):
 
 def train():
     """Train BAWN for a number of steps."""
+    shuffle_size = 1000
+    batch_size = bawn.BATCH_SIZE
+    repeat_size = None
     with tf.Graph().as_default(), tf.device('/device:CPU:0'):
+        tf.enable_eager_execution()
+        assert tf.executing_eagerly()
+        data_segments = tfio.IODataset.from_hdf5(filename='assets/noisy_train.mat', dataset='noisy_train')
+        data_labels = tfio.IODataset.from_hdf5(filename='assets/target_train.mat', dataset='target_train')
+        dataset = tf.data.Dataset.zip((data_segments, data_labels))
+        dataset = dataset.batch(batch_size)
+        dataset = dataset.repeat(repeat_size)
+        #iter = dataset.make_initializable_iterator()
+        #iter = iter(dataset)
+        segments, labels = iter(dataset).get_next()
+        tf.enable_eager_execution()
+        assert tf.executing_eagerly()
         # training data initializers
         #with tf.name_scope('input'):
             #segments_initializer, labels_initializer, input_segments, input_labels \
@@ -127,24 +144,20 @@ def train():
             
             #segment, label = tf.train.slice_input_producer([input_segments, input_labels])
         
-        data_segments = tfio.IODataset.from_hdf5(filename='assets/noisy_train.mat', dataset='noisy_train')
-        data_labels = tfio.IODataset.from_hdf5(filename='assets/target_train.mat', dataset='target_train')
+        #shuffle_size = 1000
+        #batch_size = bawn.BATCH_SIZE
+        #repeat_size = None
         
-        shuffle_size = 1000
-        batch_size = bawn.BATCH_SIZE
-        repeat_size = None
-        
-        with tf.name_scope('input'):
-            dataset = tf.data.Dataset.zip((data_segments, data_labels))
-            dataset = dataset.shuffle(shuffle_size)
-            dataset = dataset.batch(batch_size)
-            dataset = dataset.repeat(repeat_size)
-            iter = dataset.make_initializable_iterator()
-            segments, labels = iter.get_next()
+        #with tf.name_scope('input'):
+        #    dataset = dataset.shuffle(shuffle_size)
+        #    dataset = dataset.batch(batch_size)
+        #    dataset = dataset.repeat(repeat_size)
+        #    iter = dataset.make_initializable_iterator()
+        #    segments, labels = iter.get_next()
 
         # Create a variable to count the number of train() calls. This equals the
         # number of batches processed * num_gpus.
-        global_step = tf.train.create_global_step()
+        global_step = tf.train.get_or_create_global_step()
         
         # Decay the learning rate based on the number of steps.
         lr = tf.train.exponential_decay(INITIAL_LEARNING_RATE, global_step,
@@ -165,7 +178,7 @@ def train():
                         # Calculate the loss for one tower of the BAWN model. This function
                         # constructs the entire BAWN model but shares the variables across
                         # all towers.
-                        loss = tower_loss(scope, segments, labels)
+                        loss = tower_loss(scope, segments.numpy(), labels.numpy())
             
                         # Reuse variables for the next tower.
                         tf.get_variable_scope().reuse_variables()
@@ -197,10 +210,9 @@ def train():
         
         # Group all updates to into a single train op.
         train_op = tf.group(apply_gradient_op, variables_averages_op)
-    
+        
         # Create a saver.
-        saver = tf.train.Saver(tf.global_variables(), max_to_keep=10)
-    
+        saver = tf.Saver(tf.global_variables())
         # Build the summary operation from the last tower summaries.
         summary_op = tf.summary.merge(summaries, collections=[tf.GraphKeys.SUMMARY_OP])
         
@@ -219,22 +231,24 @@ def train():
         #sess = sv.prepare_or_wait_for_session(config=sess_config)
         
         with sv.managed_session(config=sess_config, start_standard_services=False) as sess:
+            tf.enable_eager_execution()
+            assert tf.executing_eagerly()
             ## initialize training data
             #sess.run(segments_initializer,
             #     feed_dict={segments_initializer: data_segments})
             #sess.run(labels_initializer,
             #     feed_dict={labels_initializer: data_labels})
             #print("init....")
-            sess.run(iter.initializer)
+            #sess.run(iter.initializer)
             #sess.run(tf.global_variables_initializer())
             print('Starting services and queue runners...')
             # start the queue runner after feed_dict so that the desired elements are enqueued
             sv.start_standard_services(sess)
             sv.start_queue_runners(sess)
-                
-            costs = []
-            start = sess.run(global_step)
-            for step in xrange(start, MAX_STEPS):
+
+            #costs = []
+            #start = global_step.numpy() #sess.run(global_step)
+            for step in xrange(0, MAX_STEPS):
                 if sv.should_stop():
                     print('SB!!!!!!!!!')
                     break
@@ -258,12 +272,13 @@ def train():
                                   'sec/batch)')
                     print (format_str % (datetime.now(), step, loss_value,
                                        examples_per_sec, sec_per_batch))
-                    costs.append(loss_value)
-                    pickle.dump(costs, open(os.path.join(LOG_DIR, 'losses.p'), "wb"))
+                    #costs.append(loss_value)
+                    #pickle.dump(sess.run(costs), open(os.path.join(LOG_DIR, 'losses.p'), "wb"))
       
             
 if __name__ == '__main__':
-    tf.enable_eager_execution()
+    #tfe.enable_eager_execution()
+    tf.compat.v1.enable_eager_execution()
     print(tf.executing_eagerly())
     parser = argparse.ArgumentParser()  
     parser.add_argument("LOG_DIR", help="LOG_DIR")
@@ -276,5 +291,5 @@ if __name__ == '__main__':
     #   data_segments = tfio.IODataset.from_hdf5(filename='assets/noisy_train.mat', dataset='noisy_train')
     #   data_labels = tfio.IODataset.from_hdf5(filename='assets/target_train.mat', dataset='target_train')
     train()
-    f_in.close()
-    f_tgt.close()
+    #f_in.close()
+    #f_tgt.close()
