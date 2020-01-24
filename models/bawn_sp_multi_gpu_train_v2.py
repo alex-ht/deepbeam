@@ -127,9 +127,13 @@ def train():
             
             #segment, label = tf.train.slice_input_producer([input_segments, input_labels])
         
+        data_segments = tfio.IODataset.from_hdf5(filename='assets/noisy_train.mat', dataset='noisy_train')
+        data_labels = tfio.IODataset.from_hdf5(filename='assets/target_train.mat', dataset='target_train')
+        
         shuffle_size = 1000
         batch_size = bawn.BATCH_SIZE
         repeat_size = None
+        
         with tf.name_scope('input'):
             dataset = tf.data.Dataset.zip((data_segments, data_labels))
             dataset = dataset.shuffle(shuffle_size)
@@ -267,10 +271,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
     LOG_DIR = args.LOG_DIR
     NUM_GPUS = args.NUM_GPUS
-    with tf.device('/device:CPU:0'):
+    #with tf.device('/device:CPU:0'):
         #data_segments, data_labels, f_in, f_tgt = bawn.load_data_simple('noisy_train.mat','target_train.mat')
-        data_segments = tfio.IODataset.from_hdf5(filename='assets/noisy_train.mat', dataset='noisy_train')
-        data_labels = tfio.IODataset.from_hdf5(filename='assets/target_train.mat', dataset='target_train')
+    #   data_segments = tfio.IODataset.from_hdf5(filename='assets/noisy_train.mat', dataset='noisy_train')
+    #   data_labels = tfio.IODataset.from_hdf5(filename='assets/target_train.mat', dataset='target_train')
     train()
     f_in.close()
     f_tgt.close()
