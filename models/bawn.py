@@ -8,11 +8,10 @@ import re
 import tensorflow as tf
 import numpy as np, h5py
 
-
 #Basic constants
-USE_FP16 = False
+USE_FP16 = True
 DATA_DIR = 'assets'
-BATCH_SIZE = 1
+BATCH_SIZE = 8
 
 # Global constants describing the BAWN data set.
 LEN_OUTPUT = 16384
@@ -27,12 +26,11 @@ NUM_RESIDUAL_CHANNELS_CLEAN = 64
 NUM_RESIDUAL_CHANNELS_NOISY = 64
 NUM_SKIP_CHANNELS = 256
 
-
-
 # If a model is trained with multiple GPUs, prefix all Op names with tower_name
 # to differentiate the operations. Note that this prefix is removed from the
 # names of the summaries when visualizing a model.
 TOWER_NAME = 'tower'
+
 
 def _activation_summary(x):
     """Helper to create summaries for activations.
@@ -81,9 +79,8 @@ def _variable_with_weight_decay(name, shape, stddev, wd):
     """
     dtype = tf.float16 if USE_FP16 else tf.float32
     var = _variable_on_cpu(
-          name,
-          shape,
-          tf.truncated_normal_initializer(stddev=stddev, dtype=dtype))
+        name, shape, tf.truncated_normal_initializer(stddev=stddev,
+                                                     dtype=dtype))
     if wd is not None:
         weight_decay = tf.multiply(tf.nn.l2_loss(var), wd, name='weight_loss')
         tf.add_to_collection('losses', weight_decay)
@@ -127,6 +124,7 @@ def _conv1d(inputs,
 
     return outputs
 
+    return outputs
 
 
 def _embed_conv1d(inputs, out_channels, activation=tf.tanh, bias=True):
@@ -141,7 +139,7 @@ def _embed_conv1d(inputs, out_channels, activation=tf.tanh, bias=True):
 
     with tf.variable_scope('pre') as scope:
         ww = _variable_with_weight_decay('kernel',
-                                         shape=[256,out_channels,2],
+                                         shape=[256, out_channels, 2],
                                          stddev=0.707,
                                          wd=None)
 
@@ -154,13 +152,15 @@ def _embed_conv1d(inputs, out_channels, activation=tf.tanh, bias=True):
 
         if bias:
             len_in = inputs.get_shape().as_list()[1]
-            b = _variable_on_cpu('bias', [len_in-1], tf.constant_initializer(0.0))
+            b = _variable_on_cpu('bias', [len_in - 1],
+                                 tf.constant_initializer(0.0))
             output = tf.nn.bias_add(output, b, name='add_bias')
         if activation:
             output = activation(output, name='tanh')
 
     return  output
 
+    return output
 
 
 def _dilated_conv1d(inputs,
@@ -265,8 +265,8 @@ def _dilated_conv1d(inputs,
 
         #remove part of the padding so that the length of the input is
         #equal to that of the outputs_residual
-        assert causality in ['clean','prior','noisy']
-        if causality in ['clean','prior']:
+        assert causality in ['clean', 'prior', 'noisy']
+        if causality in ['clean', 'prior']:
             ind_in = np.s_[rate:]
             ind_out = np.s_[-skip_width:]
             width_dense = width - rate
@@ -308,7 +308,9 @@ def _dilated_conv1d(inputs,
 
 
             #output dense is residual + input
-            outputs_dense = tf.add(inputs_proc[:, :, ind_in], outputs_residual, name='add_residual')
+            outputs_dense = tf.add(inputs_proc[:, :, ind_in],
+                                   outputs_residual,
+                                   name='add_residual')
         else:
             outputs_dense = None
 
@@ -328,9 +330,9 @@ def _dilated_conv1d(inputs,
 def check_boundries(num_blocks, num_layers, block, layer):
     bottom = False
     top = False
-    if block==0 and layer==0:
+    if block == 0 and layer == 0:
         bottom = True
-    if block+1==num_blocks and layer+1==num_layers:
+    if block + 1 == num_blocks and layer + 1 == num_layers:
         top = True
 
     return (bottom, top)
@@ -349,13 +351,13 @@ def _wavnet(inputs
 
     h = inputs
     hs = []
-    hs.append(h[:,-2:-1])
+    hs.append(h[:, -2:-1])
     skips = []
     #with tf.variable_scope(speech_type):
     for b in range(num_blocks):
         for i in range(num_layers):
-            rate = 2 ** i
-            name = '{}/b{}-l{}'.format(speech_type, b, i)    #layer i of block b
+            rate = 2**i
+            name = '{}/b{}-l{}'.format(speech_type, b, i)  #layer i of block b
             bottom, top = check_boundries(num_blocks, num_layers, b, i)
 
             h, skip, pre = _dilated_conv1d(h,
@@ -407,7 +409,8 @@ def _post_processing(inputs, num_layers, num_classes, name, reuse=False, bias=Tr
         #_activation_summary(h)
 
     #procees the last layer separately because it has no activation
-    with tf.variable_scope('{}post_l{}'.format(name, num_layers-1), reuse=reuse):
+    with tf.variable_scope('{}post_l{}'.format(name, num_layers - 1),
+                           reuse=reuse):
         outputs = _conv1d(h,
                           out_channels=num_classes,
                           filter_width=1,
@@ -432,7 +435,8 @@ def _post_processing_batch(inputs, num_layers, num_classes, name, reuse=False, b
     """
     batch_size, in_channels, width = inputs[0].get_shape().as_list()
     inputs = tf.stack(inputs, axis=1, name='list2tensor')
-    inputs_agg = tf.reshape(inputs, [batch_size, -1, width], name='skips_batch')
+    inputs_agg = tf.reshape(inputs, [batch_size, -1, width],
+                            name='skips_batch')
     with tf.variable_scope('{}skips_all'.format(name), reuse=reuse):
         h = _conv1d(inputs_agg,
                     out_channels=num_classes,
@@ -457,7 +461,8 @@ def _post_processing_batch(inputs, num_layers, num_classes, name, reuse=False, b
         #_activation_summary(h)
 
     #procees the last layer separately because it has no activation
-    with tf.variable_scope('{}post_l{}'.format(name, num_layers-1), reuse=reuse):
+    with tf.variable_scope('{}post_l{}'.format(name, num_layers - 1),
+                           reuse=reuse):
         outputs = _conv1d(h,
                           out_channels=num_classes,
                           filter_width=1,
@@ -469,7 +474,6 @@ def _post_processing_batch(inputs, num_layers, num_classes, name, reuse=False, b
     #_activation_summary(outputs)
 
     return outputs
-
 
 
 def load_data_prior(train, target):
@@ -559,7 +563,8 @@ def inputs_batch_prior(input_segments, input_labels):
 
     #print(input_segments.shape)
     #print(input_labels.shape)
-    segment, label = tf.train.slice_input_producer([input_segments, input_labels])
+    segment, label = tf.train.slice_input_producer(
+        [input_segments, input_labels])
     #label = tf.cast(label, tf.int32)
     #print(segment.shape)
     #print(label.shape)
@@ -569,7 +574,6 @@ def inputs_batch_prior(input_segments, input_labels):
         segments = tf.cast(segments, tf.float16)
         labels = tf.cast(labels, tf.float16)
     return segments, labels
-
 
 
 def load_data_likli(clean, noisy, target):
@@ -597,18 +601,18 @@ def load_data_likli(clean, noisy, target):
 
 def data_initializer_likli(data_clean, data_noisy, data_labels):
     # Input data
-    clean_initializer = tf.placeholder_with_default(
-        tf.zeros(data_clean.shape, tf.uint8),
-        shape=data_clean.shape,
-        name='clean_initializer')
-    noisy_initializer = tf.placeholder_with_default(
-        tf.zeros(data_noisy.shape, tf.float32),
-        shape=data_noisy.shape,
-        name='noisy_initializer')
-    labels_initializer = tf.placeholder_with_default(
-        tf.zeros(data_labels.shape, tf.uint8),
-        shape=data_labels.shape,
-        name='labels_initializer')
+    clean_initializer = tf.placeholder_with_default(tf.zeros(
+        data_clean.shape, tf.uint8),
+                                                    shape=data_clean.shape,
+                                                    name='clean_initializer')
+    noisy_initializer = tf.placeholder_with_default(tf.zeros(
+        data_noisy.shape, tf.float32),
+                                                    shape=data_noisy.shape,
+                                                    name='noisy_initializer')
+    labels_initializer = tf.placeholder_with_default(tf.zeros(
+        data_labels.shape, tf.uint8),
+                                                     shape=data_labels.shape,
+                                                     name='labels_initializer')
     # variables
     input_clean = tf.Variable(
           clean_initializer, trainable=False,
@@ -641,7 +645,6 @@ def inputs_batch_likli(input_clean, input_noisy, input_labels):
     return cleans, noisys, labels
 
 
-
 def inputs_batch_process(input_clean, input_noisy, batch_size=1):
     """Pre-process input for training using the Reader ops.
     Returns:
@@ -658,7 +661,6 @@ def inputs_batch_process(input_clean, input_noisy, batch_size=1):
         noisys = tf.cast(noisys, tf.float16)
 
     return cleans, noisys
-
 
 
 def model_prior(inputs_clean):
@@ -756,7 +758,6 @@ def model_denoise(inputs_clean, inputs_noisy):
     return outputs_loglik_batch
 
 
-
 def model_simple(inputs_noisy):
     """Build the BaWN simple model.
     Args:
@@ -831,28 +832,30 @@ def _step_filter(inputs,
 
     """
 
-    w = tf.get_variable(name+'/kernel')
+    w = tf.get_variable(name + '/kernel')
     if width == 2:
-        w_r = w[0, :, :]     #weight for recurrent state
-        w_e = w[1, :, :]     #weight for current state
+        w_r = w[0, :, :]  #weight for recurrent state
+        w_e = w[1, :, :]  #weight for current state
         output = tf.matmul(inputs, w_e) + tf.matmul(state, w_r)
     elif width == 3:
-        w_r = w[0, :, :]     #weight for recurrent state
-        w_e = w[1, :, :]     #weight for current state
-        w_f = w[2, :, :]     #weight for future state
-        output = tf.matmul(inputs, w_e) + tf.matmul(state, w_r) + tf.matmul(future, w_f)
+        w_r = w[0, :, :]  #weight for recurrent state
+        w_e = w[1, :, :]  #weight for current state
+        w_f = w[2, :, :]  #weight for future state
+        output = tf.matmul(inputs, w_e) + tf.matmul(state, w_r) + tf.matmul(
+            future, w_f)
     else:
         w = w[0, :, :]
         output = tf.matmul(inputs, w)
 
     if bias:
-        b = tf.get_variable(name+'/bias')         #caution!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        b = tf.get_variable(
+            name + '/bias'
+        )  #caution!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         output = tf.add(output, b)
     if activation:
         output = activation(output)
 
     return output
-
 
 
 def _embed_filter(inputs,
@@ -869,16 +872,16 @@ def _embed_filter(inputs,
       output.
     """
 
-    w = tf.get_variable(name+'/kernel')
+    w = tf.get_variable(name + '/kernel')
     if width == 2:
-        w_r = w[0, :, :]     #weight for recurrent state
-        w_e = w[1, :, :]     #weight for current state
+        w_r = w[0, :, :]  #weight for recurrent state
+        w_e = w[1, :, :]  #weight for current state
         output = tf.nn.embedding_lookup(w_e, inputs) \
                + tf.nn.embedding_lookup(w_r, state)
     elif width == 3:
-        w_r = w[0, :, :]     #weight for recurrent state
-        w_e = w[1, :, :]     #weight for current state
-        w_f = w[2, :, :]     #weight for future state
+        w_r = w[0, :, :]  #weight for recurrent state
+        w_e = w[1, :, :]  #weight for current state
+        w_f = w[2, :, :]  #weight for future state
         output = tf.nn.embedding_lookup(w_e, inputs) \
                + tf.nn.embedding_lookup(w_r, state) \
                + tf.nn.embedding_lookup(w_f, future)
@@ -887,7 +890,9 @@ def _embed_filter(inputs,
         output = tf.nn.embedding_lookup(w, inputs)
 
     if bias:
-        b = tf.get_variable(name+'/bias')         #caution!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        b = tf.get_variable(
+            name + '/bias'
+        )  #caution!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         output = tf.add(output, b)
     if activation:
         output = activation(output)
@@ -895,8 +900,13 @@ def _embed_filter(inputs,
     return output
 
 
-
-def dilated_generation(inputs, state, future=None, width=2, bias=True, top=False, name=None):
+def dilated_generation(inputs,
+                       state,
+                       future=None,
+                       width=2,
+                       bias=True,
+                       top=False,
+                       name=None):
     """
     Perform one sigle forward pass for one dilated conv layer
 
@@ -910,21 +920,36 @@ def dilated_generation(inputs, state, future=None, width=2, bias=True, top=False
     with tf.variable_scope(name, reuse=True) as scope:
 
         #generate gated output
-        output_together = _step_filter(inputs, state, future, width, bias=False, name='together')
+        output_together = _step_filter(inputs,
+                                       state,
+                                       future,
+                                       width,
+                                       bias=False,
+                                       name='together')
         _, together_channels = output_together.get_shape().as_list()
-        residual_channels = int(together_channels/2)
+        residual_channels = int(together_channels / 2)
 
         #slice 2r channels into two r channels
-        output_filter = tf.slice(output_together, [0,0], [-1,residual_channels], name='filter_part')
-        output_gate = tf.slice(output_together, [0,residual_channels], [-1,-1], name='gate_part')
+        output_filter = tf.slice(output_together, [0, 0],
+                                 [-1, residual_channels],
+                                 name='filter_part')
+        output_gate = tf.slice(output_together, [0, residual_channels],
+                               [-1, -1],
+                               name='gate_part')
         #add activations
         output_filter = tf.tanh(output_filter, name='filter')
         output_gate = tf.sigmoid(output_gate, name='gate')
-        output_gated = tf.multiply(output_filter, output_gate, name='filter_X_gate')
+        output_gated = tf.multiply(output_filter,
+                                   output_gate,
+                                   name='filter_X_gate')
 
         #output_dense = residual + input
         if not top:
-            output_residual = _step_filter(output_gated, None, None, 1, name='residual')
+            output_residual = _step_filter(output_gated,
+                                           None,
+                                           None,
+                                           1,
+                                           name='residual')
             output_dense = tf.add(inputs, output_residual)
         else:
             output_dense = None
@@ -946,12 +971,18 @@ def post_processing_generation(inputs_agg, num_layers, name):
     #inputs_agg = tf.add_n(inputs, name='sum_skips')
     h = tf.nn.relu(inputs_agg)
 
-    for l in range(num_layers-1):
+    for l in range(num_layers - 1):
         with tf.variable_scope('{}post_l{}'.format(name, l), reuse=True):
-            h = _step_filter(h, None, None, 1, name='conv1d', activation=tf.nn.relu)
+            h = _step_filter(h,
+                             None,
+                             None,
+                             1,
+                             name='conv1d',
+                             activation=tf.nn.relu)
 
     #the last layer has no activation function
-    with tf.variable_scope('{}post_l{}'.format(name, num_layers-1), reuse=True):
+    with tf.variable_scope('{}post_l{}'.format(name, num_layers - 1),
+                           reuse=True):
         outputs = _step_filter(h, None, None, 1, name='conv1d')
 
     return outputs
@@ -959,41 +990,47 @@ def post_processing_generation(inputs_agg, num_layers, name):
 
 def model_history(inputs_clean, inputs_noisy):
 
-    hs_clean_batch, _ = _wavnet(inputs=inputs_clean,
-                                num_blocks=NUM_BLOCKS_CLEAN,
-                                num_layers=NUM_LAYERS_CLEAN,
-                                num_residual_channels=NUM_RESIDUAL_CHANNELS_CLEAN,
-                                num_skip_channels=NUM_SKIP_CHANNELS,
-                                len_output=1,
-                                filter_width = 2,
-                                speech_type='clean',
-                                bias = True)
+    hs_clean_batch, _ = _wavnet(
+        inputs=inputs_clean,
+        num_blocks=NUM_BLOCKS_CLEAN,
+        num_layers=NUM_LAYERS_CLEAN,
+        num_residual_channels=NUM_RESIDUAL_CHANNELS_CLEAN,
+        num_skip_channels=NUM_SKIP_CHANNELS,
+        len_output=1,
+        filter_width=2,
+        speech_type='clean',
+        bias=True)
 
-    _, skips_noisy_batch = _wavnet(inputs=inputs_noisy,
-                                   num_blocks=NUM_BLOCKS_NOISY,
-                                   num_layers=NUM_LAYERS_NOISY,
-                                   num_residual_channels=NUM_RESIDUAL_CHANNELS_NOISY,
-                                   num_skip_channels=NUM_SKIP_CHANNELS,
-                                   len_output=LEN_OUTPUT,
-                                   filter_width = 3,
-                                   speech_type='noisy',
-                                   bias = True)
+    _, skips_noisy_batch = _wavnet(
+        inputs=inputs_noisy,
+        num_blocks=NUM_BLOCKS_NOISY,
+        num_layers=NUM_LAYERS_NOISY,
+        num_residual_channels=NUM_RESIDUAL_CHANNELS_NOISY,
+        num_skip_channels=NUM_SKIP_CHANNELS,
+        len_output=LEN_OUTPUT,
+        filter_width=3,
+        speech_type='noisy',
+        bias=True)
 
-    hs_prior_batch, _ = _wavnet(inputs=inputs_clean,
-                                num_blocks=NUM_BLOCKS_CLEAN,
-                                num_layers=NUM_LAYERS_CLEAN,
-                                num_residual_channels=NUM_RESIDUAL_CHANNELS_CLEAN,
-                                num_skip_channels=NUM_SKIP_CHANNELS,
-                                len_output=1,
-                                filter_width = 2,
-                                speech_type='prior',
-                                bias = True,
-                                trainable=False)
+    hs_prior_batch, _ = _wavnet(
+        inputs=inputs_clean,
+        num_blocks=NUM_BLOCKS_CLEAN,
+        num_layers=NUM_LAYERS_CLEAN,
+        num_residual_channels=NUM_RESIDUAL_CHANNELS_CLEAN,
+        num_skip_channels=NUM_SKIP_CHANNELS,
+        len_output=1,
+        filter_width=2,
+        speech_type='prior',
+        bias=True,
+        trainable=False)
 
     return (hs_prior_batch, hs_clean_batch, skips_noisy_batch)
 
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> 97970ccf42d9cfa1f35445b2b0ad0771e8566cd9
 def _causal_generate(self,
                      inputs,
                      num_blocks,
@@ -1020,29 +1057,41 @@ def _causal_generate(self,
 
     with tf.variable_scope('', reuse=True) as scope:
         name = '{}b0-l0/pre'.format(model_name)
-        h = bawn._embed_filter(inputs[:,0], state_[:,0], None, width=2, activation=tf.tanh, name=name)
+        h = bawn._embed_filter(inputs[:, 0],
+                               state_[:, 0],
+                               None,
+                               width=2,
+                               activation=tf.tanh,
+                               name=name)
 
     state_size = num_residual_channels
 
     for b in xrange(num_blocks):
         for i in xrange(num_layers):
-            rate = 2 ** i
+            rate = 2**i
             name = '{}b{}-l{}'.format(model_name, b, i)
 
             top = bawn.check_boundries(num_blocks, num_layers, b, i)[1]
 
             #make a length [rate] queue for each layer
-            q = tf.FIFOQueue(rate, dtypes=tf.float32, shapes=(batch_size, state_size))
+            q = tf.FIFOQueue(rate,
+                             dtypes=tf.float32,
+                             shapes=(batch_size, state_size))
             dequ = q.dequeue_many(rate)
             init = q.enqueue_many(tf.zeros((rate, batch_size, state_size)))
             state_ = q.dequeue()
-            push = q.enqueue([h]) #?
+            push = q.enqueue([h])  #?
             #list of operations
             init_ops.append(init)
             push_ops.append(push)
             dequ_ops.append(dequ)
 
-            h, skip = bawn.dilated_generation(h, state_, None, width=2, top=top, name=name)[0:2]
+            h, skip = bawn.dilated_generation(h,
+                                              state_,
+                                              None,
+                                              width=2,
+                                              top=top,
+                                              name=name)[0:2]
             skips.append(skip)
 
     skips_sum = tf.add_n(skips)
@@ -1050,10 +1099,7 @@ def _causal_generate(self,
     return (dequ_ops, init_ops, push_ops, skips_sum)
 
 
-
-def step_generation(inputs_clean,
-                    skips_noisy,
-                    batch_size):
+def step_generation(inputs_clean, skips_noisy, batch_size):
 
     dequ_ops_prior, init_ops_prior, push_ops_prior, skips_prior = \
     _causal_generate(inputs_clean,
@@ -1076,8 +1122,10 @@ def step_generation(inputs_clean,
     dequ_ops = dequ_ops_prior + dequ_ops_clean
 
     skips_likli = skips_clean + skips_noisy
-    outputs_pr = post_processing_generation(skips_prior, NUM_POST_LAYERS, 'prior/')
-    outputs_ll = post_processing_generation(skips_likli, NUM_POST_LAYERS, 'likli/')
+    outputs_pr = post_processing_generation(skips_prior, NUM_POST_LAYERS,
+                                            'prior/')
+    outputs_ll = post_processing_generation(skips_likli, NUM_POST_LAYERS,
+                                            'likli/')
     output_loglik = tf.add(outputs_pr, outputs_ll, name='output_loglik')
     output_softmax = tf.nn.softmax(output_loglik)
 
@@ -1090,42 +1138,44 @@ def step_generation(inputs_clean,
     return out_ops
 
 
-
 def preprocess_inputs(inputs_clean, inputs_noisy):
 
     _, bins_center = mu_law_bins_tf(NUM_CLASSES)
 
     with tf.device('/gpu:0'):
-        hs_prior_batch, _ = _wavnet(inputs=inputs_clean,
-                                    num_blocks=NUM_BLOCKS_CLEAN,
-                                    num_layers=NUM_LAYERS_CLEAN,
-                                    num_residual_channels=NUM_RESIDUAL_CHANNELS_CLEAN,
-                                    num_skip_channels=NUM_SKIP_CHANNELS,
-                                    len_output=1,
-                                    filter_width = 2,
-                                    speech_type='prior',
-                                    bias = True,
-                                    trainable=False)
+        hs_prior_batch, _ = _wavnet(
+            inputs=inputs_clean,
+            num_blocks=NUM_BLOCKS_CLEAN,
+            num_layers=NUM_LAYERS_CLEAN,
+            num_residual_channels=NUM_RESIDUAL_CHANNELS_CLEAN,
+            num_skip_channels=NUM_SKIP_CHANNELS,
+            len_output=1,
+            filter_width=2,
+            speech_type='prior',
+            bias=True,
+            trainable=False)
 
-        hs_clean_batch, _ = _wavnet(inputs=inputs_clean,
-                                    num_blocks=NUM_BLOCKS_CLEAN,
-                                    num_layers=NUM_LAYERS_CLEAN,
-                                    num_residual_channels=NUM_RESIDUAL_CHANNELS_CLEAN,
-                                    num_skip_channels=NUM_SKIP_CHANNELS,
-                                    len_output=1,
-                                    filter_width = 2,
-                                    speech_type='clean',
-                                    bias = True)
+        hs_clean_batch, _ = _wavnet(
+            inputs=inputs_clean,
+            num_blocks=NUM_BLOCKS_CLEAN,
+            num_layers=NUM_LAYERS_CLEAN,
+            num_residual_channels=NUM_RESIDUAL_CHANNELS_CLEAN,
+            num_skip_channels=NUM_SKIP_CHANNELS,
+            len_output=1,
+            filter_width=2,
+            speech_type='clean',
+            bias=True)
 
-        _, skips_noisy_batch = _wavnet(inputs=inputs_noisy,
-                                       num_blocks=NUM_BLOCKS_NOISY,
-                                       num_layers=NUM_LAYERS_NOISY,
-                                       num_residual_channels=NUM_RESIDUAL_CHANNELS_NOISY,
-                                       num_skip_channels=NUM_SKIP_CHANNELS,
-                                       len_output=LEN_OUTPUT,
-                                       filter_width = 3,
-                                       speech_type='noisy',
-                                       bias = True)
+        _, skips_noisy_batch = _wavnet(
+            inputs=inputs_noisy,
+            num_blocks=NUM_BLOCKS_NOISY,
+            num_layers=NUM_LAYERS_NOISY,
+            num_residual_channels=NUM_RESIDUAL_CHANNELS_NOISY,
+            num_skip_channels=NUM_SKIP_CHANNELS,
+            len_output=LEN_OUTPUT,
+            filter_width=3,
+            speech_type='noisy',
+            bias=True)
 
     dequ_ops_prior, init_ops_prior, push_ops_prior, skips_prior = \
     _causal_generate(inputs_clean,
@@ -1148,8 +1198,10 @@ def preprocess_inputs(inputs_clean, inputs_noisy):
     dequ_ops = dequ_ops_prior + dequ_ops_clean
 
     skips_likli = skips_clean + skips_noisy
-    outputs_pr = post_processing_generation(skips_prior, NUM_POST_LAYERS, 'prior/')
-    outputs_ll = post_processing_generation(skips_likli, NUM_POST_LAYERS, 'likli/')
+    outputs_pr = post_processing_generation(skips_prior, NUM_POST_LAYERS,
+                                            'prior/')
+    outputs_ll = post_processing_generation(skips_likli, NUM_POST_LAYERS,
+                                            'likli/')
     output_loglik = tf.add(outputs_pr, outputs_ll, name='output_loglik')
     output_softmax = tf.nn.softmax(output_loglik)
 
@@ -1162,17 +1214,15 @@ def preprocess_inputs(inputs_clean, inputs_noisy):
     return (init_ops, dequ_ops, out_ops)
 
 
-def run_semi_online_v2(sess,
-                       out_ops,
-                       skips_noisy_batch,
-                       indices,
-                       inputs_noisy,
+def run_semi_online_v2(sess, out_ops, skips_noisy_batch, indices, inputs_noisy,
                        num_samples):
     skips_noisy_sum = sess.run(skips_noisy_batch)
     predictions_ = []
     for step in xrange(num_samples):
-        feed_dict = feed_dict={self.inputs_clean: indices,
-                               self.skips_noisy: skips_noisy_sum[:,:,step]}
+        feed_dict = feed_dict = {
+            self.inputs_clean: indices,
+            self.skips_noisy: skips_noisy_sum[:, :, step]
+        }
         output_dist = sess.run([out_ops], feed_dict=feed_dict)[0]
         #output dim = 1 x 256, it is 2D but we need 1D input to argmax
         indices = random_bins(NUM_CLASSES, output_dist)

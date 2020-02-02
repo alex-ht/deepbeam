@@ -15,17 +15,29 @@ from six.moves import xrange  # pylint: disable=redefined-builtin
 import tensorflow as tf
 import tensorflow_io as tfio
 import bawn
+<<<<<<< HEAD
 import h5py
+=======
+import tensorflow_io as tfio
+
+import tensorflow.contrib.eager as tfe
+
+from tensorflow.python.util import deprecation
+deprecation._PRINT_DEPRECATION_WARNINGS = False
+>>>>>>> 97970ccf42d9cfa1f35445b2b0ad0771e8566cd9
 
 LOG_DIR = '/tmp'
 NUM_GPUS = 1
 LOG_DEVICE_PLACEMENT = False
+<<<<<<< HEAD
 
+=======
+>>>>>>> 97970ccf42d9cfa1f35445b2b0ad0771e8566cd9
 
 # Constants describing the training process.
 MOVING_AVERAGE_DECAY = 0.9999
 INITIAL_LEARNING_RATE = 0.001
-ANNEALING_RATE = 0.9886
+ANNEALING_RATE = 0.996
 MAX_STEPS = 800000
 NUM_STEPS_PER_DECAY = 1000
 PERIOD_SUMMARY = 120
@@ -39,9 +51,12 @@ def tower_loss(scope, segments, labels):
     Returns:
        Tensor of shape [] containing the total loss for a batch of data
     """
+<<<<<<< HEAD
     #segments = tf.Print(segments, [segments[0,4094:]], message=scope, summarize=10)
     #labels = tf.Print(labels, [labels[0,:-1]], message='labels', summarize=10)
 
+=======
+>>>>>>> 97970ccf42d9cfa1f35445b2b0ad0771e8566cd9
     # Build inference Graph.
     logits = bawn.model_simple(segments)
     #bawn._activation_summary(logits)
@@ -107,6 +122,15 @@ def average_gradients(tower_grads):
         average_grads.append(grad_and_var)
     return average_grads
 
+
+#def data_generator(data_segments, data_labels):
+## initialize training data
+#    while True:
+#        for i in range(0, data_segments.shape[0], 1000):
+#            yield ({'segments_initializer': data_segments[i*1000:(i+i)*1000], 'labels_initializer': data_labels[i*1000:(i+1)*1000]})
+
+#def GetDataSlices(x):
+#    return (data_segments[sorted(x)], data_labels[sorted(x)])
 
 
 def train():
@@ -239,3 +263,5 @@ if __name__ == '__main__':
     LOG_DIR = args.LOG_DIR
     NUM_GPUS = args.NUM_GPUS
     train()
+    #f_in.close()
+    #f_tgt.close()
